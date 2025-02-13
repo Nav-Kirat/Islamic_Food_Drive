@@ -52,9 +52,3 @@ st.markdown("### 🧠 Type of ML Task")
 st.write("""
 This problem falls under **Time Series Forecasting / Regression**, where past patterns help predict future trends.
 """)
-
-# --- FOOTER ---
-st.markdown("---")
-st.markdown("🚀 **Developed with Streamlit** | 📊 **Powered by Machine Learning**")
-
-
