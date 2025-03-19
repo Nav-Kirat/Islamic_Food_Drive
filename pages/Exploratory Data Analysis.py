@@ -11,11 +11,11 @@ st.set_page_config(
 )
 
 # --- Load Data Directly from GitHub ---
-GITHUB_URL = "https://github.com/Nav-Kirat/Islamic_Food_Drive/blob/main/merged_df.xlsx"
+GITHUB_CSV_URL = "https://github.com/Nav-Kirat/Islamic_Food_Drive/blob/main/merged_df.xlsx"
 
 @st.cache_data
 def load_data():
-    return pd.read_excel(GITHUB_URL)
+    return pd.read_csv(GITHUB_CSV_URL)
 
 # Load dataset
 merged_df = load_data()
@@ -40,7 +40,7 @@ if selected_numerical_col:
 
     # Histogram
     fig, ax = plt.subplots(figsize=(8, 5))
-    bins = range(0, merged_df[selected_numerical_col].max() + 2) if selected_numerical_col == "dependents_qty" else 20
+    bins = range(0, int(merged_df[selected_numerical_col].max()) + 2) if selected_numerical_col == "dependents_qty" else 20
     sns.histplot(merged_df[selected_numerical_col], kde=True, bins=bins, color="blue", ax=ax)
     plt.title(f"Distribution of {selected_numerical_col}")
     plt.xlabel(selected_numerical_col)
