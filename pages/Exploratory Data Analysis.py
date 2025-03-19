@@ -10,15 +10,10 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- Load Data Directly from GitHub ---
-GITHUB_CSV_URL = "https://github.com/Nav-Kirat/Islamic_Food_Drive/blob/main/merged_df.xlsx"
 
-@st.cache_data
-def load_data():
-    return pd.read_csv(GITHUB_CSV_URL)
 
 # Load dataset
-merged_df = load_data()
+merged_df = pd.read_excel("merged_df.xlsx")
 
 # --- App Title ---
 st.title("📊 Exploratory Data Analysis (EDA) Dashboard")
