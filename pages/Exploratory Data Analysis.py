@@ -15,7 +15,7 @@ st.title("📊 Exploratory Data Analysis (EDA) Dashboard")
 st.markdown("Upload your dataset and explore various visualizations.")
 
 # --- Load Data Directly from GitHub ---
-GITHUB_URL = "https://raw.githubusercontent.com/your-username/repo-name/branch-name/merged_df.xlsx"
+GITHUB_URL = "https://github.com/Nav-Kirat/Islamic_Food_Drive/blob/main/merged_df.xlsx"
 
 @st.cache_data
 def load_data():
