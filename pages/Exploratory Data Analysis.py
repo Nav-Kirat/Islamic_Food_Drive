@@ -58,7 +58,6 @@ def plot_categorical(column, top_n=20):
 
 # --- App Title ---
 st.title("📊 Exploratory Data Analysis (EDA) Dashboard")
-st.markdown("Dataset is automatically fetched from local storage.")
 
 # --- Display Dataset Preview ---
 st.write("### 📋 Preview of Dataset")
