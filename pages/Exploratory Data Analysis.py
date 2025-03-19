@@ -14,9 +14,15 @@ st.set_page_config(
 st.title("📊 Exploratory Data Analysis (EDA) Dashboard")
 st.markdown("Upload your dataset and explore various visualizations.")
 
-# --- File Uploader ---
-uploaded_file = st.file_uploader("📂 Upload your Excel file (`merged_df.xlsx`)", type=["xlsx"])
+# --- Load Data Directly from GitHub ---
+GITHUB_URL = "https://raw.githubusercontent.com/your-username/repo-name/branch-name/merged_df.xlsx"
 
+@st.cache_data
+def load_data():
+    return pd.read_excel(GITHUB_URL)
+
+# Load dataset
+merged_df = load_data()
 if uploaded_file:
     # Load Data
     merged_df = pd.read_excel(uploaded_file)
