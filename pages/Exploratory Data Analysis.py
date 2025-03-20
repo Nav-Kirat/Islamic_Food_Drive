@@ -12,8 +12,10 @@ st.set_page_config(
 
 # --- Load Dataset ---
 def load_data():
-    """Loads the dataset from a local Excel file and caches it."""
-    return pd.read_excel("merged_df.xlsx")
+    """Loads the dataset and removes unnamed columns."""
+    df = pd.read_excel("merged_df.xlsx")  # Load Excel file
+    df = df.loc[:, ~df.columns.str.contains("^Unnamed")]  # Remove unnamed columns
+    return df
 
 try:
     merged_df = load_data()
@@ -40,23 +42,18 @@ def plot_boxplot(column):
     ax.set_xlabel(column)
     st.pyplot(fig)
 
-def plot_categorical(column, top_n=20):
-    """Plots a bar chart for categorical columns, handling preferred_languages separately."""
+def plot_categorical(column):
+    """Plots a bar chart for categorical columns."""
     fig, ax = plt.subplots(figsize=(8, 5))
-    if column == "preferred_languages":
-        top_categories = merged_df[column].value_counts().head(top_n)
-        sns.barplot(y=top_categories.index, x=top_categories.values, palette="viridis", ax=ax)
-        ax.set_title(f"Top {top_n} Preferred Languages")
-    else:
-        sns.countplot(y=merged_df[column], order=merged_df[column].value_counts().index, palette="viridis", ax=ax)
-        ax.set_title(f"Distribution of {column}")
-
+    sns.countplot(y=merged_df[column], order=merged_df[column].value_counts().index, palette="viridis", ax=ax)
+    ax.set_title(f"Distribution of {column}")
     ax.set_xlabel("Count")
     ax.set_ylabel(column)
     st.pyplot(fig)
 
 # --- App Title ---
 st.title("📊 Exploratory Data Analysis (EDA) Dashboard")
+st.markdown("Dataset is automatically loaded from local storage.")
 
 # --- Display Dataset Preview ---
 st.write("### 📋 Preview of Dataset")
@@ -65,27 +62,22 @@ st.dataframe(merged_df.head())
 # --- Sidebar Options ---
 st.sidebar.header("📌 Visualization Options")
 
-# --- Dynamically Detect Column Types ---
+# --- Detect Numerical Columns ---
 numerical_columns = merged_df.select_dtypes(include=["number"]).columns.tolist()
-categorical_columns = merged_df.select_dtypes(exclude=["number"]).columns.tolist()
+selected_numerical_col = st.sidebar.selectbox("📊 Select Numerical Column", numerical_columns)
 
-# --- Numerical Data Visualization ---
-if numerical_columns:
-    selected_numerical_col = st.sidebar.selectbox("📊 Select Numerical Column", numerical_columns)
+if selected_numerical_col:
+    st.subheader(f"📈 Distribution of {selected_numerical_col}")
+    plot_histogram(selected_numerical_col)
 
-    if selected_numerical_col:
-        st.subheader(f"📈 Distribution of {selected_numerical_col}")
-        plot_histogram(selected_numerical_col)
+    st.subheader(f"📦 Boxplot of {selected_numerical_col}")
+    plot_boxplot(selected_numerical_col)
 
-        st.subheader(f"📦 Boxplot of {selected_numerical_col}")
-        plot_boxplot(selected_numerical_col)
+# --- Filter Categorical Columns (Only "family_size" and "sex") ---
+categorical_columns = ["family_size", "sex"]
 
-# --- Categorical Data Visualization ---
-if categorical_columns:
-    selected_categorical_col = st.sidebar.selectbox("📊 Select Categorical Column", categorical_columns)
+selected_categorical_col = st.sidebar.selectbox("📊 Select Categorical Column", categorical_columns)
 
-    if selected_categorical_col:
-        st.subheader(f"📊 Distribution of {selected_categorical_col}")
-
-        top_n = st.sidebar.slider("Top N Categories (Only for Preferred Languages)", 5, 50, 20)
-        plot_categorical(selected_categorical_col, top_n)
+if selected_categorical_col:
+    st.subheader(f"📊 Distribution of {selected_categorical_col}")
+    plot_categorical(selected_categorical_col)
