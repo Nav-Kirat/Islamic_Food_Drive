@@ -11,7 +11,7 @@ st.set_page_config(
 )
 
 # --- Load Dataset ---
-
+@st.cache_data
 def load_data():
     """Loads the dataset from a local Excel file and caches it."""
     return pd.read_excel("merged_df.xlsx")
