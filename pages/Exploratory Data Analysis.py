@@ -73,11 +73,14 @@ if selected_numerical_col:
     st.subheader(f"📦 Boxplot of {selected_numerical_col}")
     plot_boxplot(selected_numerical_col)
 
-# --- Filter Categorical Columns (Only "family_size" and "sex") ---
-categorical_columns = ["family_size", "sex"]
+# --- Ensure Only "household" and "sex" Appear ---
+categorical_columns = [col for col in ["household", "sex"] if col in merged_df.columns]  # Only use existing columns
 
-selected_categorical_col = st.sidebar.selectbox("📊 Select Categorical Column", categorical_columns)
+if not categorical_columns:
+    st.sidebar.warning("⚠️ No valid categorical columns found!")
+else:
+    selected_categorical_col = st.sidebar.selectbox("📊 Select Categorical Column", categorical_columns)
 
-if selected_categorical_col:
-    st.subheader(f"📊 Distribution of {selected_categorical_col}")
-    plot_categorical(selected_categorical_col)
+    if selected_categorical_col:
+        st.subheader(f"📊 Distribution of {selected_categorical_col}")
+        plot_categorical(selected_categorical_col)
