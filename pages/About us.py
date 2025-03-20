@@ -27,12 +27,12 @@ team_members = [{
     {
         "name": "Vinit Kataria",
         "linkedin": "https://www.linkedin.com/in/vinit-kataria-46b13b222/",
-        "role": "Result Interpreter and presenter",
+        "role": "Insights Analyst",
     },
     {
         "name": "Harshdeep Kaur",
         "linkedin": "https://www.linkedin.com/in/harshdeep-kaur-714b62118/",
-        "role": "Data Visualizer",
+        "role": "Research Coordinator",
     },
     
 ]
