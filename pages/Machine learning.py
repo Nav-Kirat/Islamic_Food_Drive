@@ -2,140 +2,90 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.linear_model import ElasticNet
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import r2_score, mean_squared_error
-from sklearn.preprocessing import StandardScaler
-from sklearn.pipeline import Pipeline
+import pickle
 from datetime import datetime, timedelta
 
 # --- Page Config ---
-st.set_page_config(page_title="Hamper Demand Forecasting", page_icon="📈", layout="wide")
-st.title("📦 Monthly Hamper Demand Forecasting")
+st.set_page_config(page_title="Daily Demand Forecast", page_icon="📅", layout="wide")
+st.title("📆 Daily Hamper Demand Forecast")
 
-# --- Load and Preprocess Data ---
-@st.cache_data
-def load_data():
-    df = pd.read_csv("enriched_dataset.csv")
-    df["pickup_month"] = pd.to_datetime(df["pickup_month"], format="%b-%y")
-    df = df.sort_values("pickup_month").reset_index(drop=True)
-    return df
+# --- Load Trained Model ---
+@st.cache_resource
+def load_model():
+    with open("daily_hamper_demand_forecast_model.pkl", "rb") as f:
+        return pickle.load(f)
 
-df = load_data()
+model_data = load_model()
+model = model_data["model"]
+features = model_data["features"]
+last_date = model_data["last_date"]
+last_vals = model_data["last_values"]
 
-# --- Feature Setup ---
-feature_cols = [
-    'total_visits', 'visits_last_90d', 'days_since_first_visit',
-    'avg_days_between_visits', 'distance_km', 'avg_distance_km',
-    'total_dependents', 'unique_clients', 'returning_proportion',
-    'prev_month_demand', 'rolling_3m_demand'
-]
-target_col = 'monthly_hamper_demand'
-df_model = df.dropna(subset=feature_cols + [target_col])
+# --- Forecast Function ---
+def forecast_daily_demand(days=30):
+    future_dates = [last_date + timedelta(days=i + 1) for i in range(days)]
+    future_df = pd.DataFrame({"date": future_dates})
 
-X = df_model[feature_cols]
-y = df_model[target_col]
+    # Date features
+    future_df["day_of_year"] = future_df["date"].dt.dayofyear
+    future_df["month"] = future_df["date"].dt.month
+    future_df["day_of_week"] = future_df["date"].dt.dayofweek
+    future_df["is_weekend"] = future_df["day_of_week"].isin([5, 6]).astype(int)
 
-# --- Train Model ---
-X_train, X_test, y_train, y_test = train_test_split(X, y, shuffle=False, test_size=0.2)
-model = Pipeline([
-    ("scaler", StandardScaler()),
-    ("regressor", ElasticNet(random_state=42))
-])
-model.fit(X_train, y_train)
-y_pred = model.predict(X_test)
+    # Cyclical encodings
+    future_df["day_sin"] = np.sin(2 * np.pi * future_df["day_of_year"] / 365)
+    future_df["day_cos"] = np.cos(2 * np.pi * future_df["day_of_year"] / 365)
+    future_df["month_sin"] = np.sin(2 * np.pi * future_df["month"] / 12)
+    future_df["month_cos"] = np.cos(2 * np.pi * future_df["month"] / 12)
+    future_df["week_sin"] = np.sin(2 * np.pi * future_df["day_of_week"] / 7)
+    future_df["week_cos"] = np.cos(2 * np.pi * future_df["day_of_week"] / 7)
 
-# --- Evaluation ---
-r2 = r2_score(y_test, y_pred)
-rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+    # Static features
+    for key in ["unique_clients", "total_dependents", "returning_proportion"]:
+        future_df[key] = last_vals[key]
 
-st.subheader("📊 Model Performance")
-st.markdown(f"- **R² Score:** `{r2:.4f}`")
-st.markdown(f"- **RMSE:** `{rmse:.2f}`")
+    last_30 = list(last_vals["daily_hamper_demand"])
 
-# --- Forecast Next Month (Default Forecast) ---
-latest_features = df_model[feature_cols].iloc[[-1]]
-next_month_pred = model.predict(latest_features)[0]
-st.subheader("🔮 Forecast")
-st.metric(label="Predicted Hampers for Next Month", value=f"{next_month_pred:.0f}")
+    preds = []
+    for i in range(len(future_df)):
+        lag_1d = last_30[-1] if i == 0 else preds[-1]
+        lag_7d = last_30[-7] if len(last_30) >= 7 else np.mean(last_30)
+        lag_30d = last_30[-30] if len(last_30) >= 30 else np.mean(last_30)
 
-# --- Custom Date Range Forecast ---
-st.subheader("📆 Custom Date Range Forecast")
+        roll_7d = np.mean(last_30[-7:])
+        roll_30d = np.mean(last_30[-30:])
 
-# Date range selectors
-min_date = df["pickup_month"].max() + pd.DateOffset(days=1)
-default_end = min_date + pd.DateOffset(days=30)
-start_date = st.date_input("Start Date", min_value=min_date.date(), value=min_date.date())
-end_date = st.date_input("End Date", min_value=start_date, value=default_end.date())
+        future_df.loc[i, "lag_1d"] = lag_1d
+        future_df.loc[i, "lag_7d"] = lag_7d
+        future_df.loc[i, "lag_30d"] = lag_30d
+        future_df.loc[i, "rolling_mean_7d"] = roll_7d
+        future_df.loc[i, "rolling_mean_30d"] = roll_30d
+        future_df.loc[i, "rolling_std_7d"] = 0.1 * roll_7d  # optional noise
 
-# Predict function
-def predict_demand_range(model, start_date, end_date, seed):
-    dates = pd.date_range(start=start_date, end=end_date, freq="MS")
-    predictions = []
+        pred = model.predict(future_df.loc[[i], features])[0]
+        preds.append(pred)
 
-    prev_demand = seed['prev_month_demand']
-    rolling_values = [prev_demand] * 3  # Seed for rolling mean
+    future_df["predicted_demand"] = preds
+    return future_df
 
-    for date in dates:
-        features = pd.DataFrame([{
-            'total_visits': seed['total_visits'],
-            'visits_last_90d': seed['visits_last_90d'],
-            'days_since_first_visit': seed['days_since_first_visit'] + (date - df_model["pickup_month"].max()).days,
-            'avg_days_between_visits': seed['avg_days_between_visits'],
-            'distance_km': seed['distance_km'],
-            'avg_distance_km': seed['avg_distance_km'],
-            'total_dependents': seed['total_dependents'],
-            'unique_clients': seed['unique_clients'],
-            'returning_proportion': seed['returning_proportion'],
-            'prev_month_demand': prev_demand,
-            'rolling_3m_demand': np.mean(rolling_values[-3:])
-        }])
-        prediction = model.predict(features)[0]
-        predictions.append((date, prediction))
+# --- Run Forecast ---
+forecast_days = st.slider("Days to forecast", 7, 60, 30)
+forecast = forecast_daily_demand(forecast_days)
 
-        prev_demand = prediction
-        rolling_values.append(prediction)
+# --- Plot Forecast ---
+st.subheader("📈 Forecasted Daily Demand")
+fig, ax = plt.subplots(figsize=(12, 6))
+ax.plot(forecast["date"], forecast["predicted_demand"], marker="o", label="Predicted")
+ax.set_title("Forecasted Daily Hamper Demand")
+ax.set_xlabel("Date")
+ax.set_ylabel("Demand")
+ax.grid(True)
+ax.legend()
+st.pyplot(fig)
 
-    return pd.DataFrame(predictions, columns=["Date", "Predicted Demand"])
-
-# Prepare seed values from last row
-seed_values = {
-    'total_visits': latest_features.iloc[0]['total_visits'],
-    'visits_last_90d': latest_features.iloc[0]['visits_last_90d'],
-    'days_since_first_visit': latest_features.iloc[0]['days_since_first_visit'],
-    'avg_days_between_visits': latest_features.iloc[0]['avg_days_between_visits'],
-    'distance_km': latest_features.iloc[0]['distance_km'],
-    'avg_distance_km': latest_features.iloc[0]['avg_distance_km'],
-    'total_dependents': latest_features.iloc[0]['total_dependents'],
-    'unique_clients': latest_features.iloc[0]['unique_clients'],
-    'returning_proportion': latest_features.iloc[0]['returning_proportion'],
-    'prev_month_demand': df_model[target_col].iloc[-1],
-    'rolling_3m_demand': df_model[target_col].iloc[-3:].mean()
-}
-
-# Run prediction
-if start_date and end_date:
-    forecast_df = predict_demand_range(model, pd.to_datetime(start_date), pd.to_datetime(end_date), seed_values)
-
-    # Plot forecast
-    st.subheader("📈 Forecast Plot")
-    fig, ax = plt.subplots(figsize=(12, 5))
-    ax.plot(forecast_df["Date"], forecast_df["Predicted Demand"], marker='o')
-    ax.set_title("Forecasted Monthly Hamper Demand")
-    ax.set_xlabel("Month")
-    ax.set_ylabel("Hampers")
-    ax.grid(True)
-    st.pyplot(fig)
-
-    # Show table
-    st.subheader("📋 Forecast Table")
-    # Ensure it's pandas datetime (even if it's already date)
-    forecast_df["Date"] = pd.to_datetime(forecast_df["Date"], errors='coerce')
-    
-    # Drop any rows where Date couldn't be parsed (just in case)
-    forecast_df = forecast_df.dropna(subset=["Date"])
-    
-    # Show formatted table
-    st.dataframe(forecast_df.assign(Date=forecast_df["Date"].dt.strftime('%Y-%m-%d')))
-
-
+# --- Show Table ---
+st.subheader("📋 Forecast Table")
+st.dataframe(forecast[["date", "predicted_demand"]].rename(columns={
+    "date": "Date",
+    "predicted_demand": "Expected Demand"
+}).assign(Date=lambda df: df["Date"].dt.strftime("%Y-%m-%d")))
