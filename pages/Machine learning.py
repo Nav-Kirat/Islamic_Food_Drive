@@ -129,4 +129,6 @@ if start_date and end_date:
 
     # Show table
     st.subheader("📋 Forecast Table")
+    forecast_df["Date"] = pd.to_datetime(forecast_df["Date"])
     st.dataframe(forecast_df.assign(Date=forecast_df["Date"].dt.strftime('%Y-%m-%d')))
+
