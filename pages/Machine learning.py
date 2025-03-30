@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -11,7 +10,7 @@ import matplotlib.pyplot as plt
 
 # --- Page Config ---
 st.set_page_config(page_title="Hamper Demand Forecasting", page_icon="📈", layout="wide")
-st.title("📦 Monthly Hamper Demand Forecasting (ML Model)")
+st.title("📦 Monthly Hamper Demand Forecasting")
 
 # --- Load Data ---
 @st.cache_data
@@ -23,8 +22,6 @@ def load_data():
 
 df = load_data()
 
-st.write("### Dataset Preview", df.head())
-
 # --- Feature Selection ---
 feature_cols = [
     'total_visits', 'visits_last_90d', 'days_since_first_visit',
@@ -34,41 +31,39 @@ feature_cols = [
 ]
 target_col = 'monthly_hamper_demand'
 
-# Drop rows with missing values in selected columns
+# Drop rows with missing values
 df_model = df.dropna(subset=feature_cols + [target_col])
-
 X = df_model[feature_cols]
 y = df_model[target_col]
 
 # --- Train/Test Split ---
 X_train, X_test, y_train, y_test = train_test_split(X, y, shuffle=False, test_size=0.2)
 
-# --- Model Pipeline ---
+# --- Train Model ---
 model = Pipeline([
     ("scaler", StandardScaler()),
     ("regressor", ElasticNet(random_state=42))
 ])
-
 model.fit(X_train, y_train)
 y_pred = model.predict(X_test)
 
-# --- Evaluation Metrics ---
+# --- Evaluation ---
 r2 = r2_score(y_test, y_pred)
 rmse = np.sqrt(mean_squared_error(y_test, y_pred))
 
 st.subheader("📊 Model Performance")
-st.write(f"**R² Score:** {r2:.4f}")
-st.write(f"**RMSE:** {rmse:.2f}")
+st.markdown(f"- **R² Score:** `{r2:.4f}`")
+st.markdown(f"- **RMSE:** `{rmse:.2f}`")
 
 # --- Forecast Next Month ---
-latest_row = df_model[feature_cols].iloc[[-1]]
-next_month_prediction = model.predict(latest_row)[0]
+latest_features = df_model[feature_cols].iloc[[-1]]
+next_month_pred = model.predict(latest_features)[0]
 
-st.subheader("🔮 Forecast: Next Month's Demand")
-st.metric("Predicted Hampers Needed", f"{next_month_prediction:.0f}")
+st.subheader("🔮 Forecast")
+st.metric(label="Predicted Hampers for Next Month", value=f"{next_month_pred:.0f}")
 
 # --- Plot Actual vs Predicted ---
-st.subheader("📈 Actual vs Predicted Demand")
+st.subheader("📈 Actual vs Predicted")
 
 fig, ax = plt.subplots(figsize=(12, 6))
 ax.plot(df_model["pickup_month"].iloc[-len(y_test):], y_test, label="Actual", marker='o')
