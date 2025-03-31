@@ -6,7 +6,7 @@ import torch
 
 # --- Page Config ---
 st.set_page_config(page_title="Ask the Assistant", page_icon="💬", layout="wide")
-st.title("🤖 Ask the Food Drive Assistant")
+st.title("Ask about Food Drive Data!")
 
 # --- Load & Cache Data ---
 @st.cache_data
