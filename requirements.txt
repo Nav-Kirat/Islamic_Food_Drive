@@ -6,3 +6,6 @@ pydeck
 matplotlib
 seaborn
 openpyxl
+sentence-transformers
+transformers
+torch
