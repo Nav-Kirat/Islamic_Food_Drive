@@ -8,61 +8,57 @@ import torch
 st.set_page_config(page_title="Ask the Assistant", page_icon="💬", layout="wide")
 st.title("🤖 Ask the Food Drive Assistant")
 
-# --- Load & Prepare Data ---
+# --- Load & Cache Data ---
 @st.cache_data
-def load_sample_data():
-    data = {
-        "Client_ID": [101, 102, 103],
-        "Name": ["Alice", "Bob", "Charlie"],
-        "Age": [29, 34, 42],
-        "Pickup_Date": ["2023-01-15", "2023-02-15", "2023-03-15"],
-        "Hamper_Type": ["Standard", "Premium", "Standard"],
-        "Location": ["Downtown", "Uptown", "Midtown"]
-    }
-    return pd.DataFrame(data)
+def load_enriched_data():
+    return pd.read_csv("enriched_dataset.csv")
 
-# Or load real data if needed
-transaction_data = load_sample_data()
+df = load_enriched_data()
 
-# --- Create Narrative from Data ---
-def generate_narrative(df: pd.DataFrame) -> str:
-    narrative = "Here are the latest client transactions:\n"
-    for idx, row in df.iterrows():
+# --- Generate Narrative from Data ---
+def generate_narrative_from_enriched(df, limit=10):
+    df = df.sort_values("pickup_month").dropna(subset=["pickup_month", "monthly_hamper_demand"])
+    df = df.head(limit)
+
+    narrative = "Here are recent hamper pickup summaries:\n"
+    for _, row in df.iterrows():
         narrative += (
-            f"Client {row['Client_ID']} ({row['Name']}, Age {row['Age']}) picked "
-            f"up a {row['Hamper_Type']} hamper at {row['Location']} on {row['Pickup_Date']}.\n"
+            f"In {row['pickup_month']}, approximately {int(row['monthly_hamper_demand'])} hampers were needed "
+            f"to serve {int(row['unique_clients'])} clients. "
+            f"The average client traveled {row['avg_distance_km']:.1f} km and had {int(row['total_visits'])} visits. "
+            f"Households had around {int(row['total_dependents'])} dependents total. "
+            f"Returning rate was {row['returning_proportion']:.2%}.\n"
         )
     return narrative
 
-transaction_narrative = generate_narrative(transaction_data)
+hamper_narrative = generate_narrative_from_enriched(df)
 
 # --- Static Context (Org Description) ---
 charity_info = (
-    "XYZ Charity is a non-profit organization focused on distributing food hampers. "
-    "It aims to improve community well-being by providing support to families in need."
+    "Islamic Family is a non-profit organization focused on distributing food hampers. "
+    "It aims to improve community well-being by providing culturally appropriate food support "
+    "to families in need across Edmonton and surrounding areas."
 )
 
-# --- Documents for RAG ---
 documents = {
     "doc1": charity_info,
-    "doc2": transaction_narrative
+    "doc2": hamper_narrative
 }
 
-# --- Load Embedding Model ---
+# --- Embed Documents ---
 @st.cache_resource
 def get_embedder():
     return SentenceTransformer("all-MiniLM-L6-v2")
 
 embedder = get_embedder()
 
-# --- Embed Documents ---
 doc_embeddings = {
     doc_id: embedder.encode(text, convert_to_tensor=True)
     for doc_id, text in documents.items()
 }
 
-# --- Retrieval Function ---
-def retrieve_context(query, top_k=1):
+# --- Context Retriever ---
+def retrieve_context(query, top_k=2):
     query_embedding = embedder.encode(query, convert_to_tensor=True)
     scores = {
         doc_id: util.pytorch_cos_sim(query_embedding, emb).item()
@@ -72,18 +68,18 @@ def retrieve_context(query, top_k=1):
     context = "\n\n".join(documents[doc_id] for doc_id, _ in top_doc_ids)
     return context
 
-# --- Load FLAN-T5 Model ---
+# --- Load Generator (FLAN-T5) ---
 @st.cache_resource
 def load_generator():
     return pipeline("text2text-generation", model="google/flan-t5-large", device=0 if torch.cuda.is_available() else -1)
 
 generator = load_generator()
 
-# --- Query the LLM with Context ---
+# --- Prompt Builder & LLM Response ---
 def query_llm(query, context):
     prompt = (
-        "You have some background info plus transaction data below. "
-        "Analyze the context and answer the user’s query clearly and succinctly.\n\n"
+        "You have background information and transaction data below. "
+        "Answer the user's query clearly and accurately.\n\n"
         f"Context:\n{context}\n\n"
         f"User Query: {query}\n\n"
         "Answer:"
@@ -91,21 +87,21 @@ def query_llm(query, context):
     result = generator(prompt, max_new_tokens=150, do_sample=True, temperature=0.7)
     return result[0]['generated_text'].replace(prompt, "").strip()
 
-# --- Streamlit Chat UI ---
-st.markdown("Ask anything about food hamper pickups, clients, or charity mission.")
+# --- UI: User Input & Display ---
+st.markdown("Ask about recent food hamper activity, client patterns, or organizational details.")
 
-user_query = st.text_input("💬 What do you want to know?")
-if user_query:
-    with st.spinner("Thinking..."):
-        context = retrieve_context(user_query, top_k=2)
-        response = query_llm(user_query, context)
+query = st.text_input("💬 Ask a question:")
+if query:
+    with st.spinner("Retrieving info and generating answer..."):
+        context = retrieve_context(query, top_k=2)
+        answer = query_llm(query, context)
 
     st.markdown("### 🧠 Assistant's Response")
-    st.success(response)
+    st.success(answer)
 
     with st.expander("📄 Retrieved Context"):
         st.text(context)
 
-# --- Optional: Show Table ---
-with st.expander("📋 View Transaction Data"):
-    st.dataframe(transaction_data)
+# --- Optional: Show Raw Data ---
+with st.expander("📊 View Data Sample"):
+    st.dataframe(df.head(10))
